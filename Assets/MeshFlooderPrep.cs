@@ -78,7 +78,7 @@ public class MeshFlooderPrep : MonoBehaviour
             neighbouringTriangles[i] = new int3(int.Parse(int3Values[0]), int.Parse(int3Values[1]), int.Parse(int3Values[2]));
         }
         
-        NativeArray<int> indices = new NativeArray<int>();
+        NativeArray<int> indices = new NativeArray<int>((int)mesh.GetIndexCount(0), Allocator.TempJob);
         int[] indicesList = mesh.GetIndices(0);
         for (int i = 0; i < indices.Length; i++)
         {
@@ -104,10 +104,9 @@ public class MeshFlooderPrep : MonoBehaviour
         public NativeArray<float> newWaveValue;
         
         [DeallocateOnJobCompletion] private NativeArray<int3> neighbouringTriangles;
-        [DeallocateOnJobCompletion] private NativeQueue<int> nextWaveTriangles;
-        [DeallocateOnJobCompletion] private NativeArray<bool> checkedVertices;
         [DeallocateOnJobCompletion] private NativeArray<bool> checkedTriangles;
         [DeallocateOnJobCompletion] private NativeArray<int> indices;
+        private NativeQueue<int> nextWaveTriangles;
         
         private int startTriangle;
 
@@ -125,69 +124,34 @@ public class MeshFlooderPrep : MonoBehaviour
 
         public void Execute()
         {
-            nextWaveTriangles.Enqueue(startTriangle);
+            int3 startNeighbouringTriangles = neighbouringTriangles[startTriangle];
+            checkedTriangles[startTriangle] = true;
+            nextWaveTriangles.Enqueue(startNeighbouringTriangles.x);
+            nextWaveTriangles.Enqueue(startNeighbouringTriangles.y);
+            nextWaveTriangles.Enqueue(startNeighbouringTriangles.z);
             int wave = 0;
             int maxWhile = 0;
             while (!nextWaveTriangles.IsEmpty() && maxWhile < 10000)
             {
                 maxWhile++;
+                wave++;
                 
                 int amountTriangles = nextWaveTriangles.Count;
                 for (int i = 0; i < amountTriangles; i++)
                 {
-                    int3 neighbourTriangle = nextWaveTriangles.Dequeue();
-                    if (!checkedTriangles[neighbourTriangle.x])
+                    int neighbourTriangle = nextWaveTriangles.Dequeue();
+                    if (!checkedTriangles[neighbourTriangle])
                     {
-                        checkedTriangles[neighbourTriangle.x] = true;
+                        checkedTriangles[neighbourTriangle] = true;
                             
-                        int vertexIndex1 = indices[neighbourTriangle.x * 3 + 0];
-                        int vertexIndex2 = indices[neighbourTriangle.x * 3 + 1];
-                        int vertexIndex3 = indices[neighbourTriangle.x * 3 + 2];
+                        int vertexIndex1 = indices[neighbourTriangle * 3 + 0];
+                        int vertexIndex2 = indices[neighbourTriangle * 3 + 1];
+                        int vertexIndex3 = indices[neighbourTriangle * 3 + 2];
                         newWaveValue[vertexIndex1] = wave;
                         newWaveValue[vertexIndex2] = wave;
                         newWaveValue[vertexIndex3] = wave;
 
-                        int3 neighbourTriangles1 = neighbouringTriangles[neighbourTriangle.x];
-                        if (!checkedTriangles[neighbourTriangles1.x])
-                            nextWaveTriangles.Enqueue(neighbourTriangles1.x);
-                        if (!checkedTriangles[neighbourTriangles1.y])
-                            nextWaveTriangles.Enqueue(neighbourTriangles1.y);
-                        if (!checkedTriangles[neighbourTriangles1.z])
-                            nextWaveTriangles.Enqueue(neighbourTriangles1.z);
-                    }
-                    
-                    if (!checkedTriangles[neighbourTriangle.y])
-                    {
-                        checkedTriangles[neighbourTriangle.y] = true;
-                        
-                        int vertexIndex1 = indices[neighbourTriangle.y * 3 + 0];
-                        int vertexIndex2 = indices[neighbourTriangle.y * 3 + 1];
-                        int vertexIndex3 = indices[neighbourTriangle.y * 3 + 2];
-                        newWaveValue[vertexIndex1] = wave;
-                        newWaveValue[vertexIndex2] = wave;
-                        newWaveValue[vertexIndex3] = wave;
-
-                        int3 neighbourTriangles1 = neighbouringTriangles[neighbourTriangle.y];
-                        if (!checkedTriangles[neighbourTriangles1.x])
-                            nextWaveTriangles.Enqueue(neighbourTriangles1.x);
-                        if (!checkedTriangles[neighbourTriangles1.y])
-                            nextWaveTriangles.Enqueue(neighbourTriangles1.y);
-                        if (!checkedTriangles[neighbourTriangles1.z])
-                            nextWaveTriangles.Enqueue(neighbourTriangles1.z);
-                    }
-                    
-                    if (!checkedTriangles[neighbourTriangle.z])
-                    {
-                        checkedTriangles[neighbourTriangle.z] = true;
-                        
-                        int vertexIndex1 = indices[neighbourTriangle.z * 3 + 0];
-                        int vertexIndex2 = indices[neighbourTriangle.z * 3 + 1];
-                        int vertexIndex3 = indices[neighbourTriangle.z * 3 + 2];
-                        newWaveValue[vertexIndex1] = wave;
-                        newWaveValue[vertexIndex2] = wave;
-                        newWaveValue[vertexIndex3] = wave;
-
-                        int3 neighbourTriangles1 = neighbouringTriangles[neighbourTriangle.z];
+                        int3 neighbourTriangles1 = neighbouringTriangles[neighbourTriangle];
                         if (!checkedTriangles[neighbourTriangles1.x])
                             nextWaveTriangles.Enqueue(neighbourTriangles1.x);
                         if (!checkedTriangles[neighbourTriangles1.y])
@@ -196,9 +160,8 @@ public class MeshFlooderPrep : MonoBehaviour
                             nextWaveTriangles.Enqueue(neighbourTriangles1.z);
                     }
                 }
-                wave++;
             }
-        }
+        }   
     }
 
     [BurstCompile]
